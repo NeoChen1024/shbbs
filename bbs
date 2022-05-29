@@ -112,6 +112,23 @@ SUBCMD="${1:-list}"
 
 shift 1 # remove subcommand
 
+article_check()
+{
+	local tempfile="${1}"
+	if [ -s "$tempfile" ] ;then
+		if [ ! "$(wc -l  < "$tempfile")" -ge 2 ]; then
+			error_echo "Less than 2 lines, assuming invalid"
+			rm "$tempfile"
+			return 1
+		fi
+	else
+		error_echo "File is empty"
+		rm "$tempfile"
+		return 1
+	fi
+
+}
+
 # New article
 function new()
 {
@@ -139,19 +156,9 @@ function new()
 	fi
 
 	# Start the editor
-	"$editor" "$tempfile" || error_echo "Failed to start editor"
+	$editor "$tempfile" || error_echo "Failed to start editor"
 
-	if [ -s "$tempfile" ] ;then
-		if [ ! "$(wc -l  < "$tempfile")" -ge 2 ]; then
-			error_echo "Less than 2 lines, assuming invalid"
-			rm "$tempfile"
-			return 1
-		fi
-	else
-		error_echo "File is empty"
-		rm "$tempfile"
-		return 1
-	fi
+	article_check "$tempfile" || return 1
 
 	msg_echo "New article ${FYELLOW}${BRIGHT}\"$(head -n 1 "$tempfile")\"${RESET}${FCYAN} created"
 
@@ -202,19 +209,9 @@ edit()
 	fi
 
 	# Start the editor
-	"$editor" "$tempfile" || error_echo "Failed to start editor"
+	$editor "$tempfile" || error_echo "Failed to start editor"
 
-	if [ -s "$tempfile" ] ;then
-		if [ ! "$(wc -l  < "$tempfile")" -ge 2 ]; then
-			error_echo "Less than 2 lines, assuming invalid"
-			rm "$tempfile"
-			return 1
-		fi
-	else
-		error_echo "File is empty"
-		rm "$tempfile"
-		return 1
-	fi
+	article_check "$tempfile" || return 1
 
 	msg_echo "Article ${FYELLOW}${BRIGHT}\"$(head -n 1 "$tempfile")\"${RESET}${FCYAN} updated"
 
@@ -223,6 +220,41 @@ edit()
 		return 1
 	fi
 	msg_echo "Saved as ${FYELLOW}${BRIGHT}${src%.txt}${RESET}"
+}
+
+# Read an article
+readarticle()
+{
+	local pager="${PAGER:-less}"
+
+	while getopts ":h" opt; do
+		case $opt in
+			\?)
+				error_echo "Invalid option: -$OPTARG"
+				;;
+			:)
+				error_echo "Option -$OPTARG requires an argument."
+				;;
+			h)
+				echo "Usage: bbs read <path to article>"
+		esac
+	done
+
+	if [ -z "$1" ] ;then
+		error_echo "No article specified"
+		return 1
+	fi
+
+	local src="$DATADIR/${1}.txt"
+	if [ ! -f "$src" ] ;then
+		error_echo "File not found"
+		return 1
+	fi
+
+	article_check "$src" || return 1
+
+	# Start the pager
+	$pager "$src" || error_echo "Failed to start pager ${pager}"
 }
 
 # List articles
@@ -278,6 +310,9 @@ case "$SUBCMD" in
 		;;
 	edit)
 		edit "$@"
+		;;
+	read)
+		readarticle "$@"
 		;;
 	search)
 		search "$@"

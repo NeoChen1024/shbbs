@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -xeuo pipefail
+# Initialize the data directory
+
+if [ "$#" -lt 1 ]; then
+        echo "Usage: $0 <datadir>"
+        exit 1
+fi
+
+DATADIR="$1"
+
+if [ -d "$DATADIR" ]; then
+        echo "Directory $DATADIR already exists. Aborting."
+        exit 1
+fi
+
+mkdir -p "$DATADIR" && chmod 777 "$DATADIR"
+mkdir -p "$DATADIR"/wall && chmod 755 "$DATADIR"/wall
+
+cat > "$DATADIR"/wall/motd.txt <<< "Shell Script BBS init on $(date)"$'\n'"======"$'\n'
+
+cat > "$DATADIR"/"$(date +'%s.%N').txt" <<< "First message ever on ${HOSTNAME:-$(hostname)}"$'\n'"======"$'\n'

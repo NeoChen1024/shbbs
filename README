@@ -1,0 +1,42 @@
+Shell Script BBS: The Stateless KISS BBS that nobody actually wanted, written in SHELL SCRIPT!
+
+(depends on GNU coreutils and bash)
+
+Command Set:
+    bbs new:        add new article
+    bbs edit:       edit a existing article (by id)
+    bbs search:     search through all article
+    bbs del:        delete a existing article
+    bbs list:       lists recent article(s)
+
+Article standard format:
+
+Line | Text
+-----+----------------------------------
+  1  | Example Title of Article 1
+  2  | Separator symbols (arbitrary)
+  3  | >> 1145141919.810114514
+  4  | Actual Contents follows:
+  5  | End of content
+
+line 1: title of the article
+line 2: arbitrary symbols as separator
+line 3: optional, ID of the article to reply to
+line 4: Actual body of article
+line 5: arbitrary footer / signature, etc
+
+Command options:
+    Global options:
+        -d:    BBS data directory
+        -V:    Displays version and quit
+        -v:    Verbose
+
+Structure of BBS data directory:
+
+/            -> Root of BBS data directory
++- wall      -> Global announcements
++- tech      -> arbitrary topic name
+|     +- 1653669309.789408313     -> Article filename is UNIX epoch in 9-digit precision, enough to be a unique identifier
+
+Behavior notes:
+    * Unix epoch time shall indicate the publish time of the article (initial publishing), the time of last modification is indicated by file mtime

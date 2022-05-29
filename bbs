@@ -1,0 +1,294 @@
+#!/usr/bin/env bash
+# Shell Script BBS: The Stateless KISS BBS that nobody actually wanted, written in POSIX SHELL SCRIPT!
+# vim: set tabstop=8:softtabstop=8:shiftwidth=8
+set -euo pipefail
+
+
+# Declare some (un)common variable
+VERBOSE="0"
+DATADIR="/var/bbs"
+
+	##########################################
+	# =============== Colors =============== #
+	##########################################
+
+ESC=$'\033'
+RESET="${ESC}[0m"	#Reset all attributes
+BRIGHT="${ESC}[1m"	#Bright
+DIM="${ESC}[2m"	#Dim
+BLINK="${ESC}[5m"	#Blink
+# Foreground Colours #
+FBLACK="${ESC}[30m"	#Black
+FRED="${ESC}[31m"	#Red
+FGREEN="${ESC}[32m"	#Green
+FYELLOW="${ESC}[33m"	#Yellow
+FBLUE="${ESC}[34m"	#Blue
+FMAGENTA="${ESC}[35m"	#Magenta
+FCYAN="${ESC}[36m"	#Cyan
+FWHITE="${ESC}[37m"	#White
+# Background Colours #
+BBLACK="${ESC}[40m"	#Black
+BRED="${ESC}[41m"	#Red
+BGREEN="${ESC}[42m"	#Green
+BYELLOW="${ESC}[43m"	#Yellow
+BBLUE="${ESC}[44m"	#Blue
+BMAGENTA="${ESC}[45m"	#Magenta
+BCYAN="${ESC}[46m"	#Cyan
+BWHITE="${ESC}[47m"	#White
+
+# Error Message that stops the script
+function error_echo()
+{
+	echo "${BRED}>>${RESET} ${FMAGENTA}${*}${RESET}"
+	#return 1
+}
+
+function panic()
+{
+	error_echo "${*}"
+	exit 1
+}
+
+# Normal Message
+function msg_echo()
+{
+	echo "${BBLUE}>>${RESET} ${FCYAN}${*}${RESET}"
+}
+
+# Debug Level Verbose
+function debug_echo()
+{
+	if [ "$VERBOSE" -ge 2 ] ;then
+		echo "${BRIGHT}${BBLUE}>>${RESET} ${BRIGHT}${FGREEN}${*}${RESET}"
+	fi
+}
+
+# Verbose Message
+function verbose_echo()
+{
+	if [ "$VERBOSE" -ge 1 ] ;then
+		echo "${BRIGHT}${BBLUE}>>${RESET} ${BRIGHT}${FCYAN}${*}${RESET}"
+	fi
+}
+
+while getopts ":vVhd:" opt; do
+	case $opt in
+		v)
+			VERBOSE="$((VERBOSE+1))"
+			if [ "$VERBOSE" -ge 2 ] ;then
+				set -x
+			fi
+			;;
+		V)
+			msg_echo "Version 0.00000000001"
+			;;
+		\?)
+			error_echo "Invalid option: -$OPTARG"
+			;;
+		:)
+			error_echo "Option -$OPTARG requires an argument."
+			;;
+		d)
+			DATADIR="$OPTARG"
+			;;
+		h)
+			msg_echo "No help yet"
+			;;
+	esac
+done
+
+# main program starts here
+
+nsec()
+{
+	date +'%s.%N'
+	# For GNU coreutils on FreeBSD
+	#gdate +'%s.%N'
+}
+
+shift "$((OPTIND-1))"
+
+SUBCMD="${1:-list}"
+
+shift 1 # remove subcommand
+
+# New article
+function new()
+{
+	local tempfile
+	local editor="${EDITOR:-vi}"
+
+	tempfile="$(mktemp)" # prevent the return value being ignored
+
+	while getopts ":h" opt; do
+		case $opt in
+			\?)
+				error_echo "Invalid option: -$OPTARG"
+				;;
+			:)
+				error_echo "Option -$OPTARG requires an argument."
+				;;
+			h)
+				echo "Usage: bbs new [board name]"
+		esac
+	done
+
+	local board="${1:-}"
+	if [ -n "$board" ] ;then
+		board="${board}/"	# add a trailing slash if non-null
+	fi
+
+	# Start the editor
+	"$editor" "$tempfile" || error_echo "Failed to start editor"
+
+	if [ -s "$tempfile" ] ;then
+		if [ ! "$(wc -l  < "$tempfile")" -ge 2 ]; then
+			error_echo "Less than 2 lines, assuming invalid"
+			rm "$tempfile"
+			return 1
+		fi
+	else
+		error_echo "File is empty"
+		rm "$tempfile"
+		return 1
+	fi
+
+	msg_echo "New article ${FYELLOW}${BRIGHT}\"$(head -n 1 "$tempfile")\"${RESET}${FCYAN} created"
+
+	local dst="$DATADIR/${board}$(nsec).txt"
+	if ! mv "$tempfile" "$dst"; then
+		error_echo "Non-existent board or insufficient permissions"
+		return 1
+	fi
+	chmod 644 "$dst"
+	msg_echo "Saved as ${FYELLOW}${BRIGHT}${dst#"$DATADIR"}${RESET}"
+}
+
+# Edit existing article
+edit()
+{
+	local tempfile
+	local editor="${EDITOR:-vi}"
+
+	tempfile="$(mktemp)"
+
+	while getopts ":h" opt; do
+		case $opt in
+			\?)
+				error_echo "Invalid option: -$OPTARG"
+				;;
+			:)
+				error_echo "Option -$OPTARG requires an argument."
+				;;
+			h)
+				echo "Usage: bbs edit <path to article>"
+		esac
+	done
+
+	if [ -z "$1" ] ;then
+		error_echo "No article specified"
+		return 1
+	fi
+
+	local src="$DATADIR/${1}.txt"
+	if [ ! -f "$src" ] ;then
+		error_echo "File not found"
+		return 1
+	fi
+
+	if ! cp "$src" "$tempfile"; then
+		error_echo "Unable to make temporary copy"
+		return 1
+	fi
+
+	# Start the editor
+	"$editor" "$tempfile" || error_echo "Failed to start editor"
+
+	if [ -s "$tempfile" ] ;then
+		if [ ! "$(wc -l  < "$tempfile")" -ge 2 ]; then
+			error_echo "Less than 2 lines, assuming invalid"
+			rm "$tempfile"
+			return 1
+		fi
+	else
+		error_echo "File is empty"
+		rm "$tempfile"
+		return 1
+	fi
+
+	msg_echo "Article ${FYELLOW}${BRIGHT}\"$(head -n 1 "$tempfile")\"${RESET}${FCYAN} updated"
+
+	if ! mv "$tempfile" "$src"; then
+		error_echo "Unable to writeback article"
+		return 1
+	fi
+	msg_echo "Saved as ${FYELLOW}${BRIGHT}${src%.txt}${RESET}"
+}
+
+# List articles
+list()
+{
+	cd "$DATADIR"
+
+	for files in */*.txt *.txt; do
+		msg_echo "$(date -r "$files" +"%FT%T") (${files%.txt}): ${FYELLOW}${BRIGHT}$(head -n 1 "$files")"
+	done
+}
+
+# Search articles
+search()
+{
+	local query="${1:-}"
+	if [ -z "$query" ] ;then
+		error_echo "No query specified"
+		return 1
+	fi
+
+	cd "$DATADIR"
+
+	grep --color=auto -ir -Ee "$query" .
+}
+
+# Delete article
+del()
+{
+	local article="${1:-}"
+	if [ -z "$article" ] ;then
+		error_echo "No article specified"
+		return 1
+	fi
+
+	local src="$DATADIR/${article}.txt"
+	if [ ! -f "$src" ] ;then
+		error_echo "File not found"
+		return 1
+	fi
+
+	msg_echo "Deleting ${FYELLOW}${BRIGHT}\"$(head -n 1 "$src")\"${RESET}${FCYAN}..."
+	if ! rm "$src"; then
+		error_echo "Unable to delete article"
+		return 1
+	fi
+	msg_echo "Done."
+}
+
+case "$SUBCMD" in
+	new)
+		new "$@"
+		;;
+	edit)
+		edit "$@"
+		;;
+	search)
+		search "$@"
+		;;
+	del)
+		del "$@"
+		;;
+	list)
+		list "$@"
+		;;
+	*)
+		error_echo "Invalid subcommand: $SUBCMD"
+		;;
+esac

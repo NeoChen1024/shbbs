@@ -14,7 +14,7 @@ if [ -d "$DATADIR" ]; then
         exit 1
 fi
 
-mkdir -p "$DATADIR" && chmod 777 "$DATADIR"
+mkdir -p "$DATADIR" && chmod 1777 "$DATADIR"
 mkdir -p "$DATADIR"/wall && chmod 755 "$DATADIR"/wall
 
 cat > "$DATADIR"/wall/motd.txt <<< "Shell Script BBS init on $(date)"$'\n'"======"$'\n'
